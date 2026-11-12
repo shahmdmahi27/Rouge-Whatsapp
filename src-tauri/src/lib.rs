@@ -69,17 +69,17 @@ fn request_companion_pairing_code(
 }
 
 fn setup_system_tray(app: &AppHandle) -> tauri::Result<()> {
-    let show_item = MenuItem::with_id(app, "show", "Show WhisperRust Pro", true, None::<&str>)?;
+    let show_item = MenuItem::with_id(app, "show", "Show Whisper Desktop", true, None::<&str>)?;
     let stealth_item = MenuItem::with_id(
         app,
         "toggle_stealth",
-        "Toggle Privacy Stealth Mode",
+        "Toggle Privacy Mode",
         true,
         None::<&str>,
     )?;
     let lock_item =
-        MenuItem::with_id(app, "lock_app", "Lock Workstation Now", true, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit WhisperRust", true, None::<&str>)?;
+        MenuItem::with_id(app, "lock_app", "Lock App Now", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     let menu = Menu::with_items(app, &[&show_item, &stealth_item, &lock_item, &quit_item])?;
 
@@ -127,13 +127,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let app_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_dir)?;
-            let db_path = app_dir.join("whisper_rust_pro.sqlite");
+            let db_path = app_dir.join("whisper_desktop.sqlite");
 
-            let db = VaultDb::open(&db_path).expect("Failed to open SQLCipher database");
+            let db = VaultDb::open(&db_path).expect("Failed to open local SQLite database");
             app.manage(AppState {
                 db: Mutex::new(db),
                 signal: Mutex::new(SignalEngine::new()),
@@ -151,5 +150,5 @@ pub fn run() {
             request_companion_pairing_code,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running WhisperRust Pro Tauri v2 application");
+        .expect("error while running Whisper Desktop application");
 }

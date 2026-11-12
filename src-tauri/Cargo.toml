@@ -1,7 +1,7 @@
 [package]
 name = "whisper-desktop"
 version = "1.0.0"
-description = "Fast, private WhatsApp Desktop Client for Windows and Linux powered by whatsapp-rust"
+description = "Fast, private WhatsApp Desktop Client for Windows and Linux"
 authors = ["Whisper Desktop"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
@@ -10,32 +10,22 @@ edition = "2021"
 name = "whisper_rust_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-[features]
-default = []
-# Optional full oxidezap/whatsapp-rust 0.7 protocol stack integration
-oxidezap-engine = ["dep:whatsapp-rust"]
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
 tauri-plugin-notification = "2"
-tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Bundled SQLite with FTS5 (cross-compiles cleanly on Windows MSVC & Linux GCC)
+# Single unified SQLite (libsqlite3-sys) with FTS5 — avoids duplicate sqlite3 links conflict
 rusqlite = { version = "0.32.1", features = ["bundled", "functions"] }
 
-# oxidezap/whatsapp-rust (https://github.com/oxidezap/whatsapp-rust)
-whatsapp-rust = { version = "0.7", optional = true }
-
 # WhatsApp Multi-Device Companion Protocol & Signal Cryptography
-tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets", "serde"] }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 aes-gcm = "0.10.3"
@@ -46,7 +36,6 @@ qrcode = "0.14"
 rand = "0.8.5"
 hex = "0.4.3"
 base64 = "0.22"
-futures-util = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 
