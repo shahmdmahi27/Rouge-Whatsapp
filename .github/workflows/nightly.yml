@@ -59,7 +59,7 @@ jobs:
       - name: Generate Icons, Install Dependencies & Build Bundle
         run: |
           node scripts/generate-icons.mjs
-          npm install
+          npm install --legacy-peer-deps
           npm run build
 
       - name: Build & Publish Rolling Nightly Installers

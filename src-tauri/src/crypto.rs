@@ -3,6 +3,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use hkdf::Hkdf;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha512};
 use x25519_dalek::{PublicKey, StaticSecret};
@@ -22,7 +23,9 @@ pub struct SignalEngine {
 
 impl SignalEngine {
     pub fn new() -> Self {
-        let dh_secret = StaticSecret::random_from_rng(rand::thread_rng());
+        let mut secret_bytes = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut secret_bytes);
+        let dh_secret = StaticSecret::from(secret_bytes);
         Self {
             root_key: [0x5A; 32],
             chain_key: [0x3C; 32],

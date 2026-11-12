@@ -98,7 +98,7 @@ jobs:
           node scripts/generate-icons.mjs
 
       - name: Install Frontend Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Production Frontend Bundle
         run: npm run build
