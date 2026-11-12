@@ -1,0 +1,129 @@
+name: Build & Release Installers (Windows & Linux)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Version number to release (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+        type: string
+      prerelease:
+        description: 'Mark as Pre-release on GitHub'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Semantic Version
+        id: resolve
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.release_version }}" ]]; then
+            RAW_VER="${{ inputs.release_version }}"
+            CLEAN_VER="${RAW_VER#v}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            CLEAN_VER="${GITHUB_REF#refs/tags/v}"
+          else
+            CLEAN_VER=$(cat VERSION | tr -d '[:space:]')
+          fi
+          echo "version=${CLEAN_VER}" >> $GITHUB_OUTPUT
+          echo "tag=v${CLEAN_VER}" >> $GITHUB_OUTPUT
+
+  build-tauri:
+    needs: prepare-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: '--target x86_64-pc-windows-msvc'
+            os_label: 'Windows (MSI & Setup.exe)'
+          - platform: 'ubuntu-22.04'
+            args: '--target x86_64-unknown-linux-gnu'
+            os_label: 'Linux (.deb, .rpm & .AppImage)'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux System Dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            pkg-config \
+            build-essential \
+            file
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Rust Stable Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
+
+      - name: Rust Cargo Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Synchronize Version (${{ needs.prepare-version.outputs.version }})
+        run: node scripts/bump-version.mjs ${{ needs.prepare-version.outputs.version }}
+
+      - name: Install Frontend Dependencies
+        run: npm install
+
+      - name: Build Production Frontend Bundle
+        run: npm run build
+
+      - name: Build & Bundle Native Installers & Publish GitHub Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.prepare-version.outputs.tag }}
+          releaseName: 'Whisper Desktop ${{ needs.prepare-version.outputs.tag }}'
+          releaseBody: |
+            ## Whisper Desktop ${{ needs.prepare-version.outputs.tag }}
+
+            Fast, private WhatsApp Desktop Client built in Rust for **Windows** and **Linux**.
+
+            ### Downloads
+            - **Windows (64-bit)**: Download the `.msi` or `-setup.exe` installer below.
+            - **Linux (64-bit)**: Download the `.deb` (Ubuntu/Debian), `.rpm` (Fedora/RHEL), or `.AppImage` universal binary below.
+
+            ### Highlights
+            - Personal WhatsApp login via QR Code scan or 8-Character Phone Pairing Code
+            - Multi-Account workspace switcher (`Alt+1..9`)
+            - 1-on-1 & Group Chats, 24h Status updates, Voice & Video calls with screen sharing
+            - Custom Chat Folders, Scheduled Messages, Auto-Replies, and `/` Quick Replies
+            - Stealth Privacy Mode (Read receipt blocker, Ghost online status, Sidebar blur, PIN lock)
+          releaseDraft: false
+          prerelease: ${{ inputs.prerelease || false }}
+          args: ${{ matrix.args }}

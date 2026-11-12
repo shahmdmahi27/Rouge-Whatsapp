@@ -1,0 +1,6 @@
+{
+  "name": "WhisperRust — WhatsApp Desktop Client & Tauri v2 Rust Core",
+  "description": "Full-featured native dark-mode WhatsApp Desktop client paired with an exportable Tauri v2 Rust backend workspace covering Signal Protocol E2EE, SQLite FTS5 search, Voice/Video calling with screen sharing, Status stories, Channels, and Communities.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

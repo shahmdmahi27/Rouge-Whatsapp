@@ -1,0 +1,49 @@
+[package]
+name = "whisper-desktop"
+version = "1.0.0"
+description = "Fast, private WhatsApp Desktop Client for Windows and Linux"
+authors = ["Whisper Desktop"]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+
+[lib]
+name = "whisper_rust_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
+tauri-plugin-notification = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-shell = "2"
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Bundled SQLite with FTS5 (cross-compiles cleanly on Windows MSVC & Linux GCC)
+rusqlite = { version = "0.32.1", features = ["bundled", "functions"] }
+
+# WhatsApp Multi-Device Companion Protocol & Signal Cryptography
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+x25519-dalek = { version = "2.0.1", features = ["static_secrets", "serde"] }
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+aes-gcm = "0.10.3"
+hkdf = "0.12.4"
+hmac = "0.12.1"
+sha2 = "0.10.8"
+qrcode = "0.14"
+rand = "0.8.5"
+hex = "0.4.3"
+base64 = "0.22"
+futures-util = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_UI_WindowsAndMessaging", "Win32_System_Com"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
