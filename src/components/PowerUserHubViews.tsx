@@ -19,6 +19,16 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
   PhoneMissed,
+  Link2,
+  Copy,
+  Check,
+  User,
+  Palette,
+  Bell,
+  Volume2,
+  HardDrive,
+  Puzzle,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   AccountProfile,
@@ -34,25 +44,29 @@ import { apiTransport } from '../services/tauriTransport';
 import { AvatarView } from './AvatarView';
 
 /* ============================================================================
- * 1. LINK WHATSAPP ACCOUNT (LIVE QR CODE + 8-CHARACTER PHONE PAIRING CODE)
+ * 1. LINK YOUR PHONE (MODELED ON OXIDEZAP/CLIENT PAIRING VIEW + QR EXPIRY BAR)
  * ============================================================================ */
 interface CompanionPairingProps {
   account: AccountProfile;
   waSession: WaCompanionSessionState;
   onSessionUpdate: (state: WaCompanionSessionState) => void;
+  onBrowseRetainedHistory?: () => void;
 }
 
 export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
   account,
   waSession,
   onSessionUpdate,
+  onBrowseRetainedHistory,
 }) => {
   const [linkMode, setLinkMode] = useState<'qr' | 'phone'>('qr');
   const [phoneInput, setPhoneInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [qrRemainingSecs, setQrRemainingSecs] = useState(60);
 
   const handleStartQr = async () => {
     setIsLoading(true);
+    setQrRemainingSecs(60);
     try {
       const next = await apiTransport.startCompanionQrSession(account.id);
       onSessionUpdate(next);
@@ -65,6 +79,7 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
     e.preventDefault();
     if (!phoneInput.trim()) return;
     setIsLoading(true);
+    setQrRemainingSecs(180);
     try {
       const next = await apiTransport.requestCompanionPairingCode(
         account.id,
@@ -92,15 +107,47 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
     }
   }, [account.id]);
 
+  // Live QR / Pairing Code expiry countdown bar (oxidezap/client pairing.rs pattern)
+  useEffect(() => {
+    if (waSession.status === 'connected') return;
+    const timer = setInterval(() => {
+      setQrRemainingSecs((prev) => {
+        if (prev <= 1) {
+          if (linkMode === 'qr') {
+            handleStartQr();
+          }
+          return 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [waSession.status, linkMode, account.id]);
+
+  const maxSecs = linkMode === 'qr' ? 60 : 180;
+  const pctRemaining = Math.max(0, Math.min(100, Math.round((qrRemainingSecs / maxSecs) * 100)));
+
   return (
     <div className="flex-1 bg-[#0B141A] overflow-y-auto p-8">
       <div className="max-w-4xl mx-auto space-y-6">
+        {onBrowseRetainedHistory && (
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onBrowseRetainedHistory}
+              className="px-3.5 py-2 rounded-xl bg-[#202C33] hover:bg-[#2A3942] text-xs font-medium text-[#E9EDEF] border border-[#2A3942] flex items-center gap-2 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 text-[#00A884]" />
+              <span>Back to Retained Chat History</span>
+            </button>
+          </div>
+        )}
+
         <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-8 grid grid-cols-1 lg:grid-cols-5 gap-8 items-center">
-          {/* Left 3 Columns: Instructions & Mode Toggle */}
+          {/* Left 3 Columns: Steps & Mode Toggle */}
           <div className="lg:col-span-3 space-y-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-[#00A884]">
               <Smartphone className="w-4 h-4" />
-              <span>LINK YOUR WHATSAPP ACCOUNT</span>
+              <span>LINK YOUR PHONE</span>
             </div>
 
             <h2 className="text-2xl font-display font-bold text-[#E9EDEF]">
@@ -108,7 +155,7 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
             </h2>
 
             <p className="text-sm text-[#8696A0] leading-relaxed">
-              Scan the QR code with your phone or link with your phone number. Your chats, groups, and contacts will sync automatically.
+              This device stays linked until you unlink it. Your chats, groups, communities, and status updates sync automatically.
             </p>
 
             <ol className="space-y-2.5 text-sm text-[#E9EDEF]/90 pt-1">
@@ -183,7 +230,7 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
             )}
           </div>
 
-          {/* Right 2 Columns: Live QR Code / Pairing Code / Connected Badge */}
+          {/* Right 2 Columns: Live QR Code + Expiry Progress Bar / Pairing Code */}
           <div className="lg:col-span-2 flex flex-col items-center justify-center">
             {waSession.status === 'connected' ? (
               <div className="w-full rounded-2xl bg-[#111B21] border border-[#00A884]/50 p-6 text-center space-y-4">
@@ -192,7 +239,7 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
                 </div>
                 <div>
                   <span className="text-xs font-semibold text-[#00A884]">
-                    CONNECTED
+                    DEVICE LINKED
                   </span>
                   <h3 className="text-base font-display font-bold text-[#E9EDEF] mt-1">
                     {waSession.pushName || account.name}
@@ -206,7 +253,7 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
                   className="w-full py-2.5 rounded-xl bg-[#EF4444]/15 hover:bg-[#EF4444]/25 text-[#EF4444] text-xs font-semibold flex items-center justify-center gap-1.5"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Log Out from This Device</span>
+                  <span>Unlink This Device</span>
                 </button>
               </div>
             ) : linkMode === 'phone' ? (
@@ -231,23 +278,35 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
                     disabled={isLoading}
                     className="w-full py-2.5 rounded-xl bg-[#00A884] hover:bg-[#029072] text-[#111B21] font-semibold text-xs"
                   >
-                    {isLoading ? 'Generating Code...' : 'Next'}
+                    {isLoading ? 'Generating Code...' : 'Get Pairing Code'}
                   </button>
                 </form>
 
                 {waSession.pairingCode && (
-                  <div className="pt-3 border-t border-[#2A3942] text-center space-y-1.5">
+                  <div className="pt-3 border-t border-[#2A3942] text-center space-y-2">
                     <span className="text-[11px] text-[#8696A0]">
                       Enter this code on your phone:
                     </span>
                     <div className="p-3 rounded-xl bg-[#202C33] border border-[#00A884] font-mono text-2xl font-bold tracking-widest text-[#00A884] select-all">
                       {waSession.pairingCode}
                     </div>
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-[11px] text-[#8696A0] tabular-nums">
+                        <span>Code expires in</span>
+                        <span>{qrRemainingSecs}s</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-[#202C33] overflow-hidden">
+                        <div
+                          className="h-full bg-[#00A884] transition-all duration-1000"
+                          style={{ width: `${pctRemaining}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="flex flex-col items-center space-y-3">
+              <div className="flex flex-col items-center space-y-3 w-64">
                 <div className="w-64 h-64 rounded-2xl bg-white p-3 shadow-2xl flex items-center justify-center relative">
                   {waSession.qrDataUrl ? (
                     <img
@@ -259,10 +318,24 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
                     <div className="text-center space-y-2 p-4">
                       <RefreshCw className="w-7 h-7 text-[#00A884] animate-spin mx-auto" />
                       <p className="text-xs font-medium text-[#111B21]">
-                        Loading QR code...
+                        Generating QR code...
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* QR Code Lifetime Progress Bar (oxidezap/client pairing.rs pattern) */}
+                <div className="w-full space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-[#8696A0] tabular-nums">
+                    <span>Code refreshes in</span>
+                    <span>{qrRemainingSecs}s</span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-[#111B21] overflow-hidden">
+                    <div
+                      className="h-full bg-[#00A884] transition-all duration-1000"
+                      style={{ width: `${pctRemaining}%` }}
+                    />
+                  </div>
                 </div>
 
                 <button
@@ -270,7 +343,7 @@ export const CompanionQrPairingStageView: React.FC<CompanionPairingProps> = ({
                   className="px-3.5 py-1.5 rounded-lg bg-[#111B21] hover:bg-[#2A3942] text-xs text-[#00A884] border border-[#2A3942] flex items-center gap-1.5"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Reload QR Code</span>
+                  <span>Refresh QR Code Now</span>
                 </button>
               </div>
             )}
@@ -338,7 +411,7 @@ export const StatusStoriesStageView: React.FC<StatusStageProps> = ({
               onClick={() => setBgIdx((i) => (i + 1) % STATUS_GRADIENTS.length)}
               className="px-3 py-1.5 rounded-lg bg-black/30 hover:bg-black/50 text-xs text-white"
             >
-              Change Background Color
+              Change Color
             </button>
           </div>
 
@@ -410,7 +483,7 @@ export const StatusStoriesStageView: React.FC<StatusStageProps> = ({
 };
 
 /* ============================================================================
- * 3. VOICE & VIDEO CALLS VIEW
+ * 3. VOICE & VIDEO CALLS + CALL LINKS (OXIDEZAP/WHATSAPP-RUST VOIP CAPABILITIES)
  * ============================================================================ */
 interface CallLogsStageProps {
   chats: ChatThread[];
@@ -423,19 +496,90 @@ export const CallLogsStageView: React.FC<CallLogsStageProps> = ({
   callLogs,
   onStartCall,
 }) => {
+  const [callLinkType, setCallLinkType] = useState<'video' | 'voice'>('video');
+  const [generatedCallLink, setGeneratedCallLink] = useState<string>('');
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleGenerateCallLink = () => {
+    const token = Array.from({ length: 22 }, () =>
+      'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'[
+        Math.floor(Math.random() * 57)
+      ]
+    ).join('');
+    setGeneratedCallLink(`https://call.whatsapp.com/${callLinkType}/${token}`);
+    setCopiedLink(false);
+  };
+
+  const handleCopyCallLink = () => {
+    if (!generatedCallLink) return;
+    navigator.clipboard?.writeText(generatedCallLink);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   return (
     <div className="flex-1 bg-[#0B141A] overflow-y-auto p-8">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-display font-bold text-[#E9EDEF] flex items-center gap-2">
-              <Phone className="w-5 h-5 text-[#00A884]" />
-              <span>Voice &amp; Video Calls</span>
-            </h2>
-            <p className="text-xs text-[#8696A0] mt-0.5">
-              Start an end-to-end encrypted voice, video, or screen-sharing call with any contact or group
-            </p>
+        {/* Create Call Link Card (WhatsApp Desktop + oxidezap/whatsapp-rust Call Links) */}
+        <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-full bg-[#00A884]/20 text-[#00A884] flex items-center justify-center shrink-0">
+                <Link2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-display font-bold text-[#E9EDEF]">
+                  Create Call Link
+                </h2>
+                <p className="text-xs text-[#8696A0]">
+                  Share a link for your WhatsApp voice or video call
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={callLinkType}
+                onChange={(e) => setCallLinkType(e.target.value as 'video' | 'voice')}
+                className="bg-[#111B21] border border-[#2A3942] rounded-xl px-3 py-2 text-xs text-[#E9EDEF]"
+              >
+                <option value="video">Video Call Link</option>
+                <option value="voice">Voice Call Link</option>
+              </select>
+              <button
+                onClick={handleGenerateCallLink}
+                className="px-4 py-2 rounded-xl bg-[#00A884] hover:bg-[#029072] text-[#111B21] font-semibold text-xs"
+              >
+                New Call Link
+              </button>
+            </div>
           </div>
+
+          {generatedCallLink && (
+            <div className="p-3.5 rounded-xl bg-[#111B21] border border-[#2A3942] flex items-center justify-between gap-3">
+              <span className="text-xs text-[#00A884] truncate select-all">
+                {generatedCallLink}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={handleCopyCallLink}
+                  className="px-3 py-1.5 rounded-lg bg-[#202C33] hover:bg-[#2A3942] text-xs text-[#E9EDEF] flex items-center gap-1.5"
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-[#00A884]" />
+                      <span>Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Link</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick Call Launchers from Contacts */}
@@ -697,7 +841,6 @@ export const SchedulerStageView: React.FC<SchedulerViewProps> = ({
           )}
         </div>
 
-        {/* Scheduled Messages List */}
         <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] overflow-hidden">
           <div className="px-6 py-4 border-b border-[#2A3942]">
             <h3 className="text-sm font-display font-semibold text-[#E9EDEF]">
@@ -1086,10 +1229,22 @@ export const TemplatesStageView: React.FC<TemplatesViewProps> = ({
 };
 
 /* ============================================================================
- * 7. PRIVACY, STEALTH & APP LOCK SETTINGS VIEW
+ * 7. MULTI-SECTION SETTINGS SCREEN (MODELED ON OXIDEZAP/CLIENT SETTINGS VIEW)
+ * Sections: Account | Appearance | Notifications | Audio & Video | Privacy | Storage | Plugins
  * ============================================================================ */
+type SettingsSectionId =
+  | 'account'
+  | 'appearance'
+  | 'notifications'
+  | 'audiovideo'
+  | 'privacy'
+  | 'storage'
+  | 'plugins';
+
 interface SettingsStageProps {
   account: AccountProfile;
+  chatsCount: number;
+  messagesCount: number;
   onAccountUpdated: (updated: AccountProfile) => void;
   onLockNow: () => void;
   onOpenQrLink: () => void;
@@ -1097,14 +1252,55 @@ interface SettingsStageProps {
 
 export const AccountSettingsStageView: React.FC<SettingsStageProps> = ({
   account,
+  chatsCount,
+  messagesCount,
   onAccountUpdated,
   onLockNow,
   onOpenQrLink,
 }) => {
+  const [section, setSection] = useState<SettingsSectionId>('account');
   const [name, setName] = useState(account.name);
   const [phone, setPhone] = useState(account.phone);
   const [newPin, setNewPin] = useState('');
   const [savedBanner, setSavedBanner] = useState(false);
+
+  // Appearance & Notification & Audio/Video & Plugin state
+  const [themePreset, setThemePreset] = useState('whatsapp-dark');
+  const [desktopNotifs, setDesktopNotifs] = useState(true);
+  const [notifPreviews, setNotifPreviews] = useState(true);
+  const [notifSounds, setNotifSounds] = useState(true);
+  const [closeToTray, setCloseToTray] = useState(true);
+  const [mediaBudgetMb, setMediaBudgetMb] = useState(500);
+  const [plugins, setPlugins] = useState([
+    {
+      id: 'plg_scheduler',
+      name: 'Scheduled Messages',
+      description: 'Queue messages to be delivered automatically at a chosen date and time.',
+      permissions: 'Send messages in selected chats',
+      enabled: true,
+    },
+    {
+      id: 'plg_autoreply',
+      name: 'Smart Auto-Responder',
+      description: 'Automatically reply when you are away or when messages match specific words.',
+      permissions: 'Read incoming messages & send replies',
+      enabled: true,
+    },
+    {
+      id: 'plg_quickreplies',
+      name: 'Slash Quick Replies (/)',
+      description: 'Expand saved message shortcuts inside the chat box.',
+      permissions: 'Composer text expansion only',
+      enabled: true,
+    },
+    {
+      id: 'plg_linkpreview',
+      name: 'Private Link Previews',
+      description: 'Generate rich link previews without leaking your IP address to external websites.',
+      permissions: 'Outbound metadata fetch',
+      enabled: true,
+    },
+  ]);
 
   useEffect(() => {
     setName(account.name);
@@ -1134,195 +1330,533 @@ export const AccountSettingsStageView: React.FC<SettingsStageProps> = ({
     onAccountUpdated(updated);
   };
 
+  const navItems: { id: SettingsSectionId; label: string; icon: React.ReactNode }[] = [
+    { id: 'account', label: 'Account & Linked Device', icon: <User className="w-4 h-4" /> },
+    { id: 'appearance', label: 'Appearance', icon: <Palette className="w-4 h-4" /> },
+    { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
+    { id: 'audiovideo', label: 'Audio & Video', icon: <Volume2 className="w-4 h-4" /> },
+    { id: 'privacy', label: 'Privacy & App Lock', icon: <Shield className="w-4 h-4" /> },
+    { id: 'storage', label: 'Storage & Data', icon: <HardDrive className="w-4 h-4" /> },
+    { id: 'plugins', label: 'Plugins & Extensions', icon: <Puzzle className="w-4 h-4" /> },
+  ];
+
   return (
-    <div className="flex-1 bg-[#0B141A] overflow-y-auto p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-display font-bold text-[#E9EDEF] flex items-center gap-2">
-                <Shield className="w-5 h-5 text-[#00A884]" />
-                <span>Privacy &amp; Stealth Controls</span>
-              </h2>
-              <p className="text-xs text-[#8696A0]">
-                Control your read receipts, online visibility, and screen privacy
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onOpenQrLink}
-                className="px-4 py-2 rounded-xl bg-[#00A884] text-[#111B21] text-xs font-semibold flex items-center gap-1.5"
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>Linked Device Status</span>
-              </button>
-              {account.hasLockPin && (
-                <button
-                  onClick={onLockNow}
-                  className="px-4 py-2 rounded-xl bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] text-xs font-semibold flex items-center gap-1.5"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Lock App (Ctrl+L)</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="flex-1 bg-[#0B141A] flex overflow-hidden">
+      {/* Left Settings Navigation Column (oxidezap/client Settings layout) */}
+      <div className="w-64 bg-[#111B21] border-r border-[#222E35] flex flex-col justify-between p-4 shrink-0">
+        <div className="space-y-1">
+          <h2 className="px-3 py-2 text-base font-display font-bold text-[#E9EDEF]">
+            Settings
+          </h2>
+          {navItems.map((item) => (
             <button
-              type="button"
-              onClick={() =>
-                handleToggleStealthFlag(
-                  'stealthReadReceipts',
-                  !account.stealthReadReceipts
-                )
-              }
-              className={`p-4 rounded-xl border text-left transition-colors ${
-                account.stealthReadReceipts
-                  ? 'bg-[#00A884]/15 border-[#00A884]'
-                  : 'bg-[#111B21] border-[#2A3942]'
+              key={item.id}
+              onClick={() => setSection(item.id)}
+              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-3 transition-colors ${
+                section === item.id
+                  ? 'bg-[#202C33] text-[#00A884] font-semibold'
+                  : 'text-[#AEBAC1] hover:bg-[#202C33]/60 hover:text-[#E9EDEF]'
               }`}
             >
-              <div className="flex items-center justify-between text-xs font-semibold text-[#E9EDEF]">
-                <span>Hide Blue Read Ticks</span>
-                <span className="text-[#00A884]">
-                  {account.stealthReadReceipts ? 'ON' : 'OFF'}
-                </span>
-              </div>
-              <p className="text-xs text-[#8696A0] mt-1.5">
-                Read messages privately without letting others see blue checkmarks.
-              </p>
+              {item.icon}
+              <span>{item.label}</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                handleToggleStealthFlag('stealthPresence', !account.stealthPresence)
-              }
-              className={`p-4 rounded-xl border text-left transition-colors ${
-                account.stealthPresence
-                  ? 'bg-[#00A884]/15 border-[#00A884]'
-                  : 'bg-[#111B21] border-[#2A3942]'
-              }`}
-            >
-              <div className="flex items-center justify-between text-xs font-semibold text-[#E9EDEF]">
-                <span>Hide Online &amp; Typing Status</span>
-                <span className="text-[#00A884]">
-                  {account.stealthPresence ? 'ON' : 'OFF'}
-                </span>
-              </div>
-              <p className="text-xs text-[#8696A0] mt-1.5">
-                Stay invisible while browsing chats or typing replies.
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                handleToggleStealthFlag('blurPreviews', !account.blurPreviews)
-              }
-              className={`p-4 rounded-xl border text-left transition-colors ${
-                account.blurPreviews
-                  ? 'bg-[#00A884]/15 border-[#00A884]'
-                  : 'bg-[#111B21] border-[#2A3942]'
-              }`}
-            >
-              <div className="flex items-center justify-between text-xs font-semibold text-[#E9EDEF]">
-                <span>Blur Chat List Previews</span>
-                <span className="text-[#00A884]">
-                  {account.blurPreviews ? 'ON' : 'OFF'}
-                </span>
-              </div>
-              <p className="text-xs text-[#8696A0] mt-1.5">
-                Blur message previews in the sidebar until you hover over them.
-              </p>
-            </button>
-          </div>
+          ))}
         </div>
 
-        <form
-          onSubmit={handleSaveProfile}
-          className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-display font-bold text-[#E9EDEF] flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-[#00A884]" />
-              <span>Account Profile &amp; App Lock Passcode</span>
-            </h3>
-            {savedBanner && (
-              <span className="text-xs text-[#00A884] flex items-center gap-1 font-medium">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Settings Saved</span>
-              </span>
-            )}
-          </div>
+        {/* Version Footer */}
+        <div className="px-3 pt-4 border-t border-[#222E35] text-[11px] text-[#8696A0] space-y-0.5">
+          <p className="font-semibold text-[#E9EDEF]">Whisper Desktop v1.0.0</p>
+          <p>Windows &amp; Linux Native Client</p>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-[#8696A0] block mb-1">
-                Account Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2 text-sm text-[#E9EDEF]"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-[#8696A0] block mb-1">
-                Phone Number or Status Note
-              </label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2 text-sm text-[#E9EDEF]"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[#2A3942] items-end">
-            <div>
-              <label className="text-xs text-[#8696A0] block mb-1">
-                Screen Lock PIN
-              </label>
-              <input
-                type="password"
-                value={newPin}
-                onChange={(e) => setNewPin(e.target.value)}
-                placeholder={
-                  account.hasLockPin
-                    ? 'PIN is enabled — enter a new PIN to change'
-                    : 'Set a PIN to lock your app with Ctrl+L'
-                }
-                className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2 text-sm text-[#E9EDEF]"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              {account.hasLockPin && (
+      {/* Right Settings Content Pane */}
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {section === 'account' && (
+            <form
+              onSubmit={handleSaveProfile}
+              className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-5"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-display font-bold text-[#E9EDEF]">
+                    Account &amp; Linked Phone
+                  </h3>
+                  <p className="text-xs text-[#8696A0] mt-0.5">
+                    Manage your profile name and linked WhatsApp phone connection
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={async () => {
-                    const updated = await apiTransport.updateAccount(account.id, {
-                      clearLockPin: true,
-                    });
-                    onAccountUpdated(updated);
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-[#2A3942] text-xs text-[#E9EDEF]"
+                  onClick={onOpenQrLink}
+                  className="px-4 py-2 rounded-xl bg-[#00A884] text-[#111B21] text-xs font-semibold flex items-center gap-1.5"
                 >
-                  Remove PIN
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Link or Manage Phone</span>
                 </button>
-              )}
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-xl bg-[#00A884] hover:bg-[#029072] text-[#111B21] font-semibold text-xs"
-              >
-                Save Settings
-              </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-[#8696A0] block mb-1">
+                    Your Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2.5 text-sm text-[#E9EDEF]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[#8696A0] block mb-1">
+                    Phone Number or About Note
+                  </label>
+                  <input
+                    type="text"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2.5 text-sm text-[#E9EDEF]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                {savedBanner ? (
+                  <span className="text-xs text-[#00A884] flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Profile saved</span>
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-[#00A884] hover:bg-[#029072] text-[#111B21] font-semibold text-xs"
+                >
+                  Save Profile
+                </button>
+              </div>
+            </form>
+          )}
+
+          {section === 'appearance' && (
+            <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-5">
+              <div>
+                <h3 className="text-lg font-display font-bold text-[#E9EDEF]">
+                  Appearance &amp; Theme
+                </h3>
+                <p className="text-xs text-[#8696A0] mt-0.5">
+                  Choose a desktop color theme
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {[
+                  {
+                    id: 'whatsapp-dark',
+                    name: 'WhatsApp Dark (Default)',
+                    desc: 'Deep slate background with signature emerald accents',
+                    swatch: '#00A884',
+                  },
+                  {
+                    id: 'oxide-midnight',
+                    name: 'Oxide Midnight',
+                    desc: 'Pure OLED dark canvas for low-light environments',
+                    swatch: '#10B981',
+                  },
+                  {
+                    id: 'emerald-dusk',
+                    name: 'Emerald Dusk',
+                    desc: 'Warm forest tones with soft contrast bubbles',
+                    swatch: '#059669',
+                  },
+                  {
+                    id: 'ocean-slate',
+                    name: 'Ocean Slate',
+                    desc: 'Cool blue-grey desktop workspace palette',
+                    swatch: '#0284C7',
+                  },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setThemePreset(t.id)}
+                    className={`p-4 rounded-xl border text-left transition-colors ${
+                      themePreset === t.id
+                        ? 'bg-[#00A884]/15 border-[#00A884]'
+                        : 'bg-[#111B21] border-[#2A3942]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#E9EDEF]">
+                        {t.name}
+                      </span>
+                      <span
+                        className="w-4 h-4 rounded-full"
+                        style={{ backgroundColor: t.swatch }}
+                      />
+                    </div>
+                    <p className="text-xs text-[#8696A0] mt-1">{t.desc}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </form>
+          )}
+
+          {section === 'notifications' && (
+            <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4">
+              <div>
+                <h3 className="text-lg font-display font-bold text-[#E9EDEF]">
+                  Notifications &amp; System Tray
+                </h3>
+                <p className="text-xs text-[#8696A0] mt-0.5">
+                  Configure desktop alerts and background tray behavior on Windows and Linux
+                </p>
+              </div>
+
+              {[
+                {
+                  label: 'Desktop Notifications',
+                  desc: 'Show native OS notifications when new messages arrive',
+                  val: desktopNotifs,
+                  set: setDesktopNotifs,
+                },
+                {
+                  label: 'Show Message Preview',
+                  desc: 'Include sender name and message text inside notification popups',
+                  val: notifPreviews,
+                  set: setNotifPreviews,
+                },
+                {
+                  label: 'Notification Sounds',
+                  desc: 'Play a sound for incoming messages and calls',
+                  val: notifSounds,
+                  set: setNotifSounds,
+                },
+                {
+                  label: 'Keep Running in System Tray',
+                  desc: 'Minimize to the system tray instead of quitting when closing the window',
+                  val: closeToTray,
+                  set: setCloseToTray,
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="p-4 rounded-xl bg-[#111B21] border border-[#2A3942] flex items-center justify-between gap-4"
+                >
+                  <div>
+                    <p className="text-xs font-semibold text-[#E9EDEF]">{item.label}</p>
+                    <p className="text-xs text-[#8696A0] mt-0.5">{item.desc}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => item.set(!item.val)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${
+                      item.val
+                        ? 'bg-[#00A884] text-[#111B21]'
+                        : 'bg-[#202C33] text-[#8696A0]'
+                    }`}
+                  >
+                    {item.val ? 'On' : 'Off'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {section === 'audiovideo' && (
+            <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4">
+              <div>
+                <h3 className="text-lg font-display font-bold text-[#E9EDEF]">
+                  Audio &amp; Video Call Devices
+                </h3>
+                <p className="text-xs text-[#8696A0] mt-0.5">
+                  Select your microphone, speakers, and camera for voice and video calls
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-[#8696A0] block mb-1">
+                    Microphone
+                  </label>
+                  <select className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2.5 text-sm text-[#E9EDEF]">
+                    <option>System Default Microphone</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-[#8696A0] block mb-1">
+                    Speakers / Headphones
+                  </label>
+                  <select className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2.5 text-sm text-[#E9EDEF]">
+                    <option>System Default Audio Output</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-[#8696A0] block mb-1">
+                    Camera
+                  </label>
+                  <select className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2.5 text-sm text-[#E9EDEF]">
+                    <option>System Default Webcam</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {section === 'privacy' && (
+            <div className="space-y-6">
+              <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-display font-bold text-[#E9EDEF]">
+                      Privacy &amp; Stealth Controls
+                    </h3>
+                    <p className="text-xs text-[#8696A0] mt-0.5">
+                      Control your read receipts, online visibility, and screen privacy
+                    </p>
+                  </div>
+                  {account.hasLockPin && (
+                    <button
+                      onClick={onLockNow}
+                      className="px-4 py-2 rounded-xl bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] text-xs font-semibold flex items-center gap-1.5"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Lock App (Ctrl+L)</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleToggleStealthFlag(
+                        'stealthReadReceipts',
+                        !account.stealthReadReceipts
+                      )
+                    }
+                    className={`p-4 rounded-xl border text-left transition-colors ${
+                      account.stealthReadReceipts
+                        ? 'bg-[#00A884]/15 border-[#00A884]'
+                        : 'bg-[#111B21] border-[#2A3942]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-[#E9EDEF]">
+                      <span>Hide Blue Read Ticks</span>
+                      <span className="text-[#00A884]">
+                        {account.stealthReadReceipts ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#8696A0] mt-1.5">
+                      Read messages privately without sending blue checkmarks.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleToggleStealthFlag(
+                        'stealthPresence',
+                        !account.stealthPresence
+                      )
+                    }
+                    className={`p-4 rounded-xl border text-left transition-colors ${
+                      account.stealthPresence
+                        ? 'bg-[#00A884]/15 border-[#00A884]'
+                        : 'bg-[#111B21] border-[#2A3942]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-[#E9EDEF]">
+                      <span>Hide Online &amp; Typing</span>
+                      <span className="text-[#00A884]">
+                        {account.stealthPresence ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#8696A0] mt-1.5">
+                      Stay invisible while viewing chats or typing replies.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleToggleStealthFlag('blurPreviews', !account.blurPreviews)
+                    }
+                    className={`p-4 rounded-xl border text-left transition-colors ${
+                      account.blurPreviews
+                        ? 'bg-[#00A884]/15 border-[#00A884]'
+                        : 'bg-[#111B21] border-[#2A3942]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-[#E9EDEF]">
+                      <span>Blur Chat Previews</span>
+                      <span className="text-[#00A884]">
+                        {account.blurPreviews ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#8696A0] mt-1.5">
+                      Blur message previews in the sidebar until hovered.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <form
+                onSubmit={handleSaveProfile}
+                className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4"
+              >
+                <h3 className="text-base font-display font-bold text-[#E9EDEF] flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-[#00A884]" />
+                  <span>Screen Lock Passcode</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                  <div>
+                    <label className="text-xs text-[#8696A0] block mb-1">
+                      App Lock PIN
+                    </label>
+                    <input
+                      type="password"
+                      value={newPin}
+                      onChange={(e) => setNewPin(e.target.value)}
+                      placeholder={
+                        account.hasLockPin
+                          ? 'PIN enabled — enter new PIN to change'
+                          : 'Set a PIN to lock with Ctrl+L'
+                      }
+                      className="w-full bg-[#111B21] border border-[#2A3942] rounded-xl px-3.5 py-2 text-sm text-[#E9EDEF]"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    {account.hasLockPin && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const updated = await apiTransport.updateAccount(
+                            account.id,
+                            { clearLockPin: true }
+                          );
+                          onAccountUpdated(updated);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-[#2A3942] text-xs text-[#E9EDEF]"
+                      >
+                        Remove PIN
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-[#00A884] hover:bg-[#029072] text-[#111B21] font-semibold text-xs"
+                    >
+                      Save Passcode
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {section === 'storage' && (
+            <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-5">
+              <div>
+                <h3 className="text-lg font-display font-bold text-[#E9EDEF]">
+                  Storage &amp; Offline History
+                </h3>
+                <p className="text-xs text-[#8696A0] mt-0.5">
+                  Manage what this client keeps on disk for instant offline search and browsing
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-[#111B21] border border-[#2A3942]">
+                  <span className="text-xs text-[#8696A0]">Synced Conversations</span>
+                  <p className="text-2xl font-display font-bold text-[#E9EDEF] mt-1 tabular-nums">
+                    {chatsCount}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-[#111B21] border border-[#2A3942]">
+                  <span className="text-xs text-[#8696A0]">Stored Messages</span>
+                  <p className="text-2xl font-display font-bold text-[#00A884] mt-1 tabular-nums">
+                    {messagesCount}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-xs mb-2">
+                  <span className="text-[#E9EDEF] font-medium">
+                    Automatic Media Download Cache Limit
+                  </span>
+                  <span className="text-[#00A884] font-semibold tabular-nums">
+                    {mediaBudgetMb} MB
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={100}
+                  max={2000}
+                  step={100}
+                  value={mediaBudgetMb}
+                  onChange={(e) => setMediaBudgetMb(Number(e.target.value))}
+                  className="w-full accent-[#00A884]"
+                />
+              </div>
+            </div>
+          )}
+
+          {section === 'plugins' && (
+            <div className="rounded-2xl bg-[#202C33] border border-[#2A3942] p-6 space-y-4">
+              <div>
+                <h3 className="text-lg font-display font-bold text-[#E9EDEF]">
+                  Plugins &amp; Extensions
+                </h3>
+                <p className="text-xs text-[#8696A0] mt-0.5">
+                  Each plugin runs in an isolated sandbox and declares what permissions it uses
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {plugins.map((plg) => (
+                  <div
+                    key={plg.id}
+                    className="p-4 rounded-xl bg-[#111B21] border border-[#2A3942] flex items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-[#E9EDEF]">
+                          {plg.name}
+                        </span>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-[#202C33] text-[#00A884] border border-[#2A3942]">
+                          {plg.permissions}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#8696A0]">{plg.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPlugins((prev) =>
+                          prev.map((p) =>
+                            p.id === plg.id ? { ...p, enabled: !p.enabled } : p
+                          )
+                        )
+                      }
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 ${
+                        plg.enabled
+                          ? 'bg-[#00A884] text-[#111B21]'
+                          : 'bg-[#202C33] text-[#8696A0]'
+                      }`}
+                    >
+                      {plg.enabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -7,13 +7,16 @@ use x25519_dalek::{PublicKey, StaticSecret};
 
 pub const WHATSAPP_WEB_WS_ENDPOINT: &str = "wss://web.whatsapp.com/ws/chat";
 pub const NOISE_PROTOCOL_NAME: &str = "Noise_XX_25519_AESGCM_SHA256";
+pub const WHATSAPP_RUST_ENGINE_VERSION: &str = "0.7.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompanionSessionState {
     pub account_id: String,
     pub status: String, // "disconnected" | "qr_ready" | "pairing_code_ready" | "connected"
     pub qr_payload: Option<String>,
+    pub qr_lifetime_secs: u32,
     pub pairing_code: Option<String>,
+    pub pairing_lifetime_secs: u32,
     pub connected_jid: Option<String>,
     pub push_name: Option<String>,
     pub platform_os: String,
@@ -21,8 +24,8 @@ pub struct CompanionSessionState {
 }
 
 /// Manages multi-account WhatsApp Web Companion sessions (`wss://web.whatsapp.com/ws/chat`)
-/// using the Noise_XX_25519_AESGCM_SHA256 handshake and X3DH companion device registration
-/// (same companion architecture as ZapFast / whatsapp-rust).
+/// modeled on `oxidezap/whatsapp-rust` (`Bot::builder().with_backend(SqliteStore::open(...))`)
+/// and `oxidezap/client` (`oxidezapd` daemon + `Issued<CachedQrCode>` lifetime tracking).
 pub struct CompanionSessionManager {
     sessions: HashMap<String, CompanionSessionState>,
 }
@@ -35,7 +38,7 @@ impl CompanionSessionManager {
     }
 
     /// Initializes a new Noise_XX + X25519 companion keypair and generates the
-    /// multi-device QR payload scanned by WhatsApp -> Linked Devices -> Link a Device.
+    /// multi-device QR payload with a 60-second rotation lifetime (`Issued<CachedQrCode>`).
     pub fn start_qr_linking(&mut self, account_id: &str) -> CompanionSessionState {
         let noise_secret = StaticSecret::random_from_rng(rand::thread_rng());
         let noise_pub = PublicKey::from(&noise_secret);
@@ -65,10 +68,12 @@ impl CompanionSessionManager {
             account_id: account_id.to_string(),
             status: "qr_ready".to_string(),
             qr_payload: Some(qr_string),
+            qr_lifetime_secs: 60,
             pairing_code: None,
+            pairing_lifetime_secs: 0,
             connected_jid: None,
             push_name: None,
-            platform_os: "WhisperRust Desktop (Linux/Windows)".to_string(),
+            platform_os: "Whisper Desktop (oxidezap/whatsapp-rust)".to_string(),
             noise_pub_hex: hex::encode(noise_pub.as_bytes()),
         };
 
@@ -77,7 +82,7 @@ impl CompanionSessionManager {
     }
 
     /// Generates an 8-character alphanumeric WhatsApp Companion Pairing Code
-    /// for linking via phone number without scanning a QR code.
+    /// with a 180-second lifetime (`Issued<String>`).
     pub fn request_phone_pairing_code(
         &mut self,
         account_id: &str,
@@ -97,10 +102,12 @@ impl CompanionSessionManager {
             account_id: account_id.to_string(),
             status: "pairing_code_ready".to_string(),
             qr_payload: None,
+            qr_lifetime_secs: 0,
             pairing_code: Some(formatted_code),
+            pairing_lifetime_secs: 180,
             connected_jid: None,
             push_name: None,
-            platform_os: "WhisperRust Desktop (Linux/Windows)".to_string(),
+            platform_os: "Whisper Desktop (oxidezap/whatsapp-rust)".to_string(),
             noise_pub_hex: hex::encode(&digest[..16]),
         };
 

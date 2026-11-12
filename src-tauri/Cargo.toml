@@ -1,7 +1,7 @@
 [package]
 name = "whisper-desktop"
 version = "1.0.0"
-description = "Fast, private WhatsApp Desktop Client for Windows and Linux"
+description = "Fast, private WhatsApp Desktop Client for Windows and Linux powered by whatsapp-rust"
 authors = ["Whisper Desktop"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
@@ -9,6 +9,11 @@ edition = "2021"
 [lib]
 name = "whisper_rust_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = []
+# Optional full oxidezap/whatsapp-rust 0.7 protocol stack integration
+oxidezap-engine = ["dep:whatsapp-rust"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -25,6 +30,9 @@ serde_json = "1.0"
 
 # Bundled SQLite with FTS5 (cross-compiles cleanly on Windows MSVC & Linux GCC)
 rusqlite = { version = "0.32.1", features = ["bundled", "functions"] }
+
+# oxidezap/whatsapp-rust (https://github.com/oxidezap/whatsapp-rust)
+whatsapp-rust = { version = "0.7", optional = true }
 
 # WhatsApp Multi-Device Companion Protocol & Signal Cryptography
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }

@@ -1189,6 +1189,7 @@ export default function App() {
             account={activeAccount}
             waSession={waSession}
             onSessionUpdate={setWaSession}
+            onBrowseRetainedHistory={() => setActiveTab('chats')}
           />
         ) : activeTab === 'status' ? (
           <StatusStoriesStageView
@@ -1239,6 +1240,8 @@ export default function App() {
         ) : activeTab === 'settings' && activeAccount ? (
           <AccountSettingsStageView
             account={activeAccount}
+            chatsCount={chats.length}
+            messagesCount={messages.length}
             onAccountUpdated={(updated) =>
               setAccounts((prev) =>
                 prev.map((a) => (a.id === updated.id ? updated : a))
